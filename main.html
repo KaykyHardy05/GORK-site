@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Gerenciamento de Usuários com CSV</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .section { margin-bottom: 20px; }
+        .hidden { display: none; }
+        label { display: block; margin: 5px 0; }
+        input, button { margin: 5px; padding: 5px; }
+        #permissoes div { display: inline-block; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <!-- Seção de Login -->
+    <div class="section" id="loginSection">
+        <h2>Login</h2>
+        <label>Email: <input type="email" id="loginEmail"></label>
+        <label>Senha: <input type="password" id="loginSenha"></label>
+        <button onclick="fazerLogin()">Entrar</button>
+        <p id="loginErro" style="color: red;"></p>
+    </div>
+
+    <!-- Seção de Usuário Logado -->
+    <div class="section hidden" id="usuarioSection">
+        <h2>Bem-vindo, <span id="nomeUsuario"></span>!</h2>
+        <p>Email: <span id="emailUsuario"></span></p>
+        <h3>Permissões</h3>
+        <div id="permissoes"></div>
+        <button onclick="logout()">Sair</button>
+    </div>
+
+    <!-- Seção de Administração -->
+    <div class="section hidden" id="adminSection">
+        <h2>Gerenciar Usuários</h2>
+        <h3>Adicionar/Editar Usuário</h3>
+        <label>Nome: <input type="text" id="nome"></label>
+        <label>Email: </input><input type="email" id="email"></label>
+        <label>Senha: <input type="text" id="senha"></label>
+        <h4>Permissões</h4>
+        <div id="permissoesForm"></div>
+        <button onclick="addOrUpdateUser()">Salvar Usuário</button>
+        <h3>Exportar Usuários</h3>
+        <button onclick="exportarCSV()">Baixar CSV</button>
+        <h3>Importar Usuários</h3>
+        <input type="file" id="inputCSV" accept=".csv">
+        <button onclick="importarCSV()">Carregar CSV</button>
+        <p id="adminErro" style="color: red;"></p>
+    </div>
+
+    <script>
+        // Lista de permissões (exemplo)
+        const permissoesNomes = [
+            "Ver Dashboard", "Editar Usuários", "Excluir Usuários",
+            "Gerar Relatórios", "Configurar Sistema", "Acessar Logs",
+            "Publicar Conteúdo", "Moderar Comentários", "Gerenciar Backup"
+        ];
+
+        // Usuários carregados (inicialmente vazio)
+        let usuarios = [];
+        let usuarioLogado = null;
+
+        // Inicializa formulário de permissões
+        function initPermissoesForm() {
+            const permissoesDiv = document.getElementById("permissoesForm");
+            permissoesNomes.forEach((nome, index) => {
+                const label = document.createElement("label");
+                label.innerHTML = `<input type="checkbox" class="perm-checkbox" data-index="${index}">${nome}`;
+                permissoesDiv.appendChild(label);
+            });
+        }
+
+        // Faz login
+        function fazerLogin() {
+            const email = document.getElementById("loginEmail").value;
+            const senha = document.getElementById("loginSenha").value;
+            const erro = document.getElementById("loginErro");
+            
+            const usuario = usuarios.find(u => u.email === email && u.senha === senha);
+            if (usuario) {
+                usuarioLogado = usuario;
+                document.getElementById("loginSection").classList.add("hidden");
+                document.getElementById("usuarioSection").classList.remove("hidden");
+                document.getElementById("nomeUsuario").textContent = usuario.nome;
+                document.getElementById("emailUsuario").textContent = usuario.email;
+                
+                // Exibe permissões
+                const permissoesDiv = document.getElementById("permissoes");
+                permissoesDiv.innerHTML = "";
+                usuario.permissoes.split("").forEach((bit, index) => {
+                    if (bit === "1") {
+                        const div = document.createElement("div");
+                        div.textContent = permissoesNomes[index] || `Permissão ${index + 1}`;
+                        permissoesDiv.appendChild(div);
+                    }
+                });
+
+                // Mostra seção de admin se tiver permissão (ex.: 2ª permissão = Editar Usuários)
+                if (usuario.permissoes[1] === "1") {
+                    document.getElementById("adminSection").classList.remove("hidden");
+                }
+            } else {
+                erro.textContent = "Email ou senha inválidos.";
+            }
+        }
+
+        // Logout
+        function logout() {
+            usuarioLogado = null;
+            document.getElementById("loginSection").classList.remove("hidden");
+            document.getElementById("usuarioSection").classList.add("hidden");
+            document.getElementById("adminSection").classList.add("hidden");
+            document.getElementById("loginEmail").value = "";
+            document.getElementById("loginSenha").value = "";
+            document.getElementById("loginErro").textContent = "";
+        }
+
+        // Adiciona ou atualiza usuário
+        function addOrUpdateUser() {
+            const nome = document.getElementById("nome").value;
+            const email = document.getElementById("email").value;
+            const senha = document.getElementById("senha").value;
+            const erro = document.getElementById("adminErro");
+            
+            if (!nome || !email || !senha) {
+                erro.textContent = "Preencha todos os campos.";
+                return;
+            }
+
+            // Monta permissões binárias
+            const checkboxes = document.querySelectorAll(".perm-checkbox");
+            let permissoes = Array(permissoesNomes.length).fill("0");
+            checkboxes.forEach(cb => {
+                if (cb.checked) {
+                    permissoes[cb.dataset.index] = "1";
+                }
+            });
+            permissoes = permissoes.join("");
+
+            // Verifica se o usuário já existe
+            const index = usuarios.findIndex(u => u.email === email);
+            if (index !== -1) {
+                // Atualiza usuário existente
+                usuarios[index] = { nome, email, senha, permissoes };
+            } else {
+                // Adiciona novo usuário
+                usuarios.push({ nome, email, senha, permissoes });
+            }
+
+            erro.textContent = "Usuário salvo com sucesso!";
+            // Limpa formulário
+            document.getElementById("nome").value = "";
+            document.getElementById("email").value = "";
+            document.getElementById("senha").value = "";
+            checkboxes.forEach(cb => cb.checked = false);
+        }
+
+        // Exporta usuários para CSV
+        function exportarCSV() {
+            const csvContent = [
+                ["nome", "email", "senha", "permissoes"],
+                ...usuarios.map(u => [u.nome, u.email, u.senha, u.permissoes])
+            ].map(linha => linha.join(",")).join("\n");
+            
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "usuarios.csv";
+            link.click();
+            URL.revokeObjectURL(link.href);
+        }
+
+        // Importa usuários de um CSV
+        function importarCSV() {
+            const input = document.getElementById("inputCSV");
+            const file = input.files[0];
+            const erro = document.getElementById("adminErro");
+            
+            if (!file) {
+                erro.textContent = "Selecione um arquivo CSV.";
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const texto = e.target.result;
+                const linhas = texto.trim().split("\n").map(linha => linha.split(","));
+                
+                // Valida cabeçalho
+                if (linhas[0].join(",") !== "nome,email,senha,permissoes") {
+                    erro.textContent = "Formato de CSV inválido.";
+                    return;
+                }
+
+                // Carrega usuários (ignora cabeçalho)
+                usuarios = linhas.slice(1).map(linha => ({
+                    nome: linha[0],
+                    email: linha[1],
+                    senha: linha[2],
+                    permissoes: linha[3]
+                }));
+
+                erro.textContent = "Usuários importados com sucesso!";
+                input.value = ""; // Limpa input
+            };
+            reader.readAsText(file);
+        }
+
+        // Inicializa formulário de permissões
+        initPermissoesForm();
+    </script>
+</body>
+</html>
